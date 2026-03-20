@@ -5,6 +5,7 @@ A Streamlit-based prototype to help CSOs and policy actors discover, interpret, 
 ## Problem Context
 
 CSOs and policy actors repeatedly struggle to:
+
 - Find up-to-date gender-related data quickly
 - Locate the correct institution and latest source
 - Work with PDF-heavy or narrative-only resources
@@ -18,6 +19,7 @@ Build a **Streamlit prototype** that helps users discover, interpret, and use ge
 ## Getting Started
 
 ### Prerequisites
+
 - Python 3.8+
 - Streamlit
 
@@ -104,6 +106,7 @@ nyereka-gender-app/
 ## Data Source
 
 The application uses a baseline CSV inventory containing gender-related resources with the following metadata:
+
 - Resource title
 - Institution/Source
 - Date/Year
@@ -116,11 +119,13 @@ The application uses a baseline CSV inventory containing gender-related resource
 ## Scope & Constraints
 
 ### In Scope
+
 - Use baseline CSV inventory provided for fast start
 - Validate key resources directly from NISR links
 - Streamlit web application
 
 ### Out of Scope
+
 - Bypassing restricted systems or protected endpoints
 - Building backend databases (use provided CSV as data source)
 
