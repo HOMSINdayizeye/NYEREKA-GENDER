@@ -1,28 +1,25 @@
-"""
-NYEREKA Gender - Source Package
-"""
+"""NYEREKA Gender shared package exports."""
 
-from .loaders import load_studies, load_resources, load_quality, load_all_data
-from .filters import filter_by_category, filter_by_year, filter_by_search, apply_all_filters
-from .link_checker import check_url_accessibility, validate_resource_links
-from .quality_badges import calculate_quality_score, get_quality_badge, get_badge_with_emoji
-from .insights import get_category_insights, generate_advocacy_brief, generate_policy_recommendation
+from .analytics import district_vs_national, gender_gap_table, top_advocacy_priorities
+from .loaders import (
+    has_processed_data,
+    load_all,
+    load_districts,
+    load_indicator_catalog,
+    load_indicators,
+    load_quality_summary,
+    load_sources,
+)
 
 __all__ = [
-    "load_studies",
-    "load_resources",
-    "load_quality",
-    "load_all_data",
-    "filter_by_category",
-    "filter_by_year",
-    "filter_by_search",
-    "apply_all_filters",
-    "check_url_accessibility",
-    "validate_resource_links",
-    "calculate_quality_score",
-    "get_quality_badge",
-    "get_badge_with_emoji",
-    "get_category_insights",
-    "generate_advocacy_brief",
-    "generate_policy_recommendation"
+    "has_processed_data",
+    "load_indicators",
+    "load_indicator_catalog",
+    "load_sources",
+    "load_quality_summary",
+    "load_districts",
+    "load_all",
+    "gender_gap_table",
+    "top_advocacy_priorities",
+    "district_vs_national",
 ]

@@ -30,6 +30,9 @@ cd nyereka-gender-app
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Build processed indicators from raw data in ../data
+python scripts/build_indicators.py
 ```
 
 ### Running the Application
@@ -38,30 +41,40 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
+If raw files change, rebuild indicators:
+
+```bash
+python scripts/build_indicators.py
+```
+
 ## Project Structure
 
 ```
 nyereka-gender-app/
-├── app.py                      # Main entry point (Nyereka branding + navigation)
+├── app.py                      # Main entry point (hero + navigation)
 ├── requirements.txt            # Dependencies (streamlit, pandas, plotly, requests)
 ├── README.md                   # Project documentation
 ├── VALIDATION.md               # Data validation rules
+├── scripts/
+│   └── build_indicators.py     # Build processed indicator tables from raw data
 ├── .gitignore
 ├── .streamlit/                 # Streamlit configuration (theme, layout)
 │   └── config.toml
 
 ├── data/
-│   └── sample/                 # Sample dataset (for testing/demo)
-│       ├── studies.csv
-│       ├── study_resources.csv
-│       └── quality_report.csv
+│   └── processed/              # Generated indicator data used by dashboard
+│       ├── indicators.csv
+│       ├── indicator_catalog.csv
+│       ├── sources.csv
+│       ├── quality_summary.csv
+│       └── districts.csv
 
 ├── pages/
-│   ├── Discovery.py          # 🔎 Smart search & filtering
-│   ├── Dashboard.py           # 📊 District insights & visualization
-│   ├── Data_Quality.py       # ⚠️ Data quality indicators
-│   ├── Advocacy_Assistant.py # 🎯 Advocacy recommendations (KEY FEATURE)
-│   └── Reports.py             # 📄 Generate/export insights
+│   ├── Discovery.py           # Smart search/filter + recommendations
+│   ├── Dashboard.py           # District-level interactive visualization
+│   ├── Data_Quality.py        # Quality scores, caveats, and checklist
+│   ├── Advocacy_Assistant.py  # Recommendations + follow-up tracking
+│   └── Reports.py             # Quarterly report generation + exports
 
 └── src/
     ├── __init__.py

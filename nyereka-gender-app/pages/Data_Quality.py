@@ -1,107 +1,88 @@
-"""
-Page: Data Quality - Quality Indicators
-"""
+"""Data quality indicators and caveat transparency."""
+from __future__ import annotations
+
+import plotly.express as px
 import streamlit as st
-import pandas as pd
 
-st.set_page_config(page_title="Data Quality - NYEREKA Gender", page_icon=" ")
+from src.loaders import has_processed_data, load_indicators, load_quality_summary
+from src.theme import apply_theme, kpi_card, render_source_links
 
-st.title(" Data Quality Indicators")
+st.set_page_config(page_title="Data Quality | NYEREKA", page_icon=" ", layout="wide")
+apply_theme("Data Quality Indicators", "Quality scores, weighting methods, caveats, and follow-up checklist.")
 
-st.markdown("""
-This page displays data quality indicators and limitations for each resource.
-Use this information to understand the reliability of the data.
-""")
+if not has_processed_data():
+    st.error("Processed files are missing. Build them first:")
+    st.code("python scripts/build_indicators.py", language="bash")
+    st.stop()
 
-# Load data
-@st.cache_data
-def load_data():
-    try:
-        resources = pd.read_csv("data/sample/study_resources.csv")
-        quality = pd.read_csv("data/sample/quality_report.csv")
-        return resources, quality
-    except FileNotFoundError:
-        st.error("Data files not found.")
-        return pd.DataFrame(), pd.DataFrame()
+indicators = load_indicators()
+quality = load_quality_summary()
 
-resources, quality = load_data()
+if indicators.empty:
+    st.error("No indicator data found.")
+    st.stop()
 
-# Quality badge legend
-st.sidebar.subheader("Quality Badges")
-st.sidebar.info("""
-**🟢 High Quality**: Official source, recent data, comprehensive coverage
+indicators = indicators.dropna(subset=["value_pct"]).copy()
 
-**🟡 Medium Quality**: Reliable source, older data, partial coverage
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    kpi_card("Datasets Rated", f"{quality['dataset_name'].nunique():,}", "Quality-scored data sources")
+with c2:
+    kpi_card("Average Quality", f"{quality['quality_score'].mean():.1f}", "Composite score")
+with c3:
+    high_count = (quality["quality_badge"] == "High").sum()
+    kpi_card("High Quality", f"{high_count:,}", "Datasets in high tier")
+with c4:
+    weighted_share = (indicators["weight_var"] != "unweighted").mean() * 100
+    kpi_card("Weighted Indicators", f"{weighted_share:.1f}%", "Indicators using survey weights")
 
-**🔴 Limited**: Older data, narrow scope, incomplete documentation
-""")
+st.markdown("### Dataset Quality Badges")
+fig = px.bar(
+    quality.sort_values("quality_score", ascending=True),
+    x="quality_score",
+    y="dataset_name",
+    color="quality_badge",
+    orientation="h",
+    color_discrete_map={"High": "#16a34a", "Medium": "#f59e0b", "Limited": "#dc2626"},
+    title="Quality score by dataset",
+)
+fig.update_layout(height=420, yaxis_title="", xaxis_title="Quality score")
+st.plotly_chart(fig, use_container_width=True)
 
-# Quality overview
-st.subheader("Quality Overview")
+st.dataframe(
+    quality[["dataset_name", "year", "quality_badge", "quality_score", "freshness", "coverage", "weighted_methods", "source_url"]],
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "source_url": st.column_config.LinkColumn("Open Source", display_text="Open in new tab"),
+    },
+)
 
-if not quality.empty:
-    # Summary stats
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        high_quality = len(quality[quality["quality_badge"] == "High"])
-        st.metric("High Quality Resources", high_quality)
-    
-    with col2:
-        medium_quality = len(quality[quality["quality_badge"] == "Medium"])
-        st.metric("Medium Quality Resources", medium_quality)
-    
-    with col3:
-        avg_score = quality["quality_score"].mean()
-        st.metric("Average Quality Score", f"{avg_score:.1f}")
-    
-    st.markdown("---")
-    
-    # Quality details table
-    st.subheader("Resource Quality Details")
-    
-    # Merge with resource info
-    if not resources.empty:
-        merged = resources.merge(quality, on="resource_id")
-        
-        # Display with color-coded badges
-        for idx, row in merged.iterrows():
-            badge_color = "🟢" if row["quality_badge"] == "High" else "🟡" if row["quality_badge"] == "Medium" else "🔴"
-            
-            with st.expander(f"{badge_color} {row['resource_title']} (Score: {row['quality_score']})"):
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown(f"**Quality Badge:** {badge_color} {row['quality_badge']}")
-                    st.markdown(f"**Quality Score:** {row['quality_score']}/100")
-                    st.markdown(f"**Source Authority:** {row['source_authority']}/100")
-                    st.markdown(f"**Freshness:** {row['freshness']}/100")
-                
-                with col2:
-                    st.markdown(f"**Coverage:** {row['coverage']}/100")
-                    st.markdown(f"**Documentation:** {row['documentation']}/100")
-                    st.markdown(f"**Validation Status:** {row['validation_status']}")
-                    st.markdown(f"**Last Validated:** {row['last_validated']}")
-                
-                st.markdown("---")
-                st.markdown(f"** Caveats:** {row['caveats']}")
-else:
-    st.info("No quality data available")
+st.markdown("#### Source Access Links")
+render_source_links(quality[["dataset_name", "year", "source_url"]].drop_duplicates(), meta_cols=["year"])
 
-# Quality factors explanation
-st.markdown("---")
-st.subheader("Understanding Quality Scores")
+st.markdown("### Indicator-level Caveats")
+caveat_df = (
+    indicators[["indicator_name", "dataset_name", "weight_var", "denominator_rule", "caveat", "geo_level", "sex", "source_url"]]
+    .drop_duplicates()
+    .sort_values(["dataset_name", "indicator_name"])
+)
+st.dataframe(
+    caveat_df,
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "source_url": st.column_config.LinkColumn("Open Source", display_text="Open in new tab"),
+    },
+)
 
-st.markdown("""
-The quality score is calculated based on four factors:
-
-| Factor | Weight | Description |
-|--------|--------|-------------|
-| Freshness | 30% | How recent the data is |
-| Source Authority | 30% | Credibility of the data source |
-| Coverage | 20% | Geographic and demographic coverage |
-| Documentation | 20% | Quality of metadata and documentation |
-
-**Note:** Higher scores indicate better overall quality, but users should 
-consider the specific caveats for each resource when using the data for advocacy.
-""")
+st.markdown("### Follow-up Data Quality Checklist")
+followups = [
+    "Re-run `python scripts/build_indicators.py` after any new raw data download.",
+    "Validate district-level results against published tables before final submission.",
+    "For DHS GBV indicators, keep `d005` as weight variable (do not replace with `v005`).",
+    "Document denominator filters for each KPI in the final report appendix.",
+    "Flag EC owner-sex indicator as low-confidence due to high missingness.",
+]
+for item in followups:
+    st.markdown(f"- [ ] {item}")

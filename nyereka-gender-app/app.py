@@ -1,109 +1,80 @@
-"""
-NYEREKA Gender Data Portal
-Main entry point - Streamlit application
-"""
+"""NYEREKA Gender main landing page."""
+from __future__ import annotations
+
 import streamlit as st
 
-# Page configuration
+from src.loaders import has_processed_data, load_all
+from src.theme import apply_theme, kpi_card, render_source_links
+
 st.set_page_config(
-    page_title="NYEREKA Gender",
+    page_title="NYEREKA Gender Intelligence Hub",
     page_icon=" ",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-# Custom CSS for branding
-st.markdown("""
-<style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #1E3A5F;
-        text-align: center;
-        padding: 1rem;
-    }
-    .sub-header {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #2E5077;
-    }
-    .highlight {
-        background-color: #E8F4FD;
-        padding: 1rem;
-        border-radius: 0.5rem;
-    }
-</style>
-""", unsafe_allow_html=True)
+apply_theme(
+    "NYEREKA Gender Intelligence Hub",
+    "Evidence platform for Rwanda gender advocacy using DHS, LFS, EICV, PHC, FinScope, and Establishment Census microdata.",
+)
 
+if not has_processed_data():
+    st.error("Processed indicator files are missing.")
+    st.code("cd nyereka-gender-app && python scripts/build_indicators.py", language="bash")
+    st.stop()
 
-def main():
-    """Main application entry point."""
-    
-    # Header
-    st.markdown('<p class="main-header">🔍 NYEREKA Gender Data Portal</p>', unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    # Welcome section
-    st.markdown("""
-    ### Welcome to NYEREKA Gender
-    
-    This application helps CSOs and policy actors discover, interpret, and use 
-    gender-related resources with less friction.
-    
-    **Quick Start**: Use the navigation menu on the left to explore different features.
-    """)
-    
-    # Feature highlights
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.markdown("""
-        ### 🔎 Discovery
-        Search and filter gender-related resources by category, year, and source.
-        """)
-    
-    with col2:
-        st.markdown("""
-        ### 📊 Dashboard
-        View district-level insights and visualizations.
-        """)
-    
-    with col3:
-        st.markdown("""
-        ### ⚠️ Data Quality
-        Understand data quality indicators and limitations.
-        """)
-    
-    with col4:
-        st.markdown("""
-        ### 🎯 Advocacy
-        Generate recommendations for advocacy and policy.
-        """)
-    
-    st.markdown("---")
-    
-    # Sidebar navigation info
-    st.sidebar.title("Navigation")
-    st.sidebar.info(
-        "Use the pages in the sidebar to navigate through different features:\n\n"
-        "1. **Discovery** - Smart search & filtering\n"
-        "2. **Dashboard** - District insights & visualization\n"
-        "3. **Data Quality** - Quality indicators\n"
-        "4. **Advocacy Assistant** - Recommendations (Key Feature)\n"
-        "5. **Reports** - Generate/export insights"
-    )
-    
-    # Team info in sidebar
-    st.sidebar.title("Team")
-    st.sidebar.markdown("""
-    **NYEREKA GENDER Team**
-    
-    - Amos NDAYIZEYE
-    - Amos MUSABYIMANA
-    - Abraham TUYISHIME
-    """)
+bundle = load_all()
+indicators = bundle["indicators"]
+sources = bundle["sources"]
+quality = bundle["quality"]
 
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    kpi_card("Indicators", f"{indicators['indicator_id'].nunique():,}", "Curated KPI definitions")
+with col2:
+    kpi_card("Datasets", f"{indicators['dataset_name'].nunique():,}", "Integrated microdata sources")
+with col3:
+    kpi_card("District Coverage", f"{indicators['district_code'].dropna().nunique():.0f}", "Rwanda districts with metrics")
+with col4:
+    kpi_card("Latest Year", f"{int(indicators['year'].max())}", "Most recent source in pipeline")
 
-if __name__ == "__main__":
-    main()
+st.markdown("### Presentation Flow")
+st.markdown(
+    """
+1. National snapshot with top gender gaps.
+2. District explorer for Huye and peer districts.
+3. Advocacy assistant for recommendations and follow-ups.
+4. Quarterly report and data-quality transparency.
+    """
+)
+
+st.markdown("### Data Sources and Access Paths")
+source_table = (
+    sources[["dataset_name", "year", "theme", "source_url"]]
+    .drop_duplicates()
+    .sort_values(["year", "dataset_name"], ascending=[False, True])
+)
+st.dataframe(
+    source_table,
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "source_url": st.column_config.LinkColumn("Open Source", display_text="Open in new tab"),
+    },
+)
+st.markdown("#### Direct Source Links")
+render_source_links(source_table, meta_cols=["year", "theme"])
+
+st.markdown("### Quality Snapshot")
+st.dataframe(
+    quality[["dataset_name", "quality_badge", "quality_score", "freshness", "coverage", "weighted_methods"]],
+    use_container_width=True,
+    hide_index=True,
+)
+
+with st.sidebar:
+    st.header("Quick Actions")
+    st.caption("If raw files change, rebuild indicators before demo.")
+    st.code("python scripts/build_indicators.py", language="bash")
+    st.caption("Run app")
+    st.code("streamlit run app.py", language="bash")

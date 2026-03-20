@@ -1,90 +1,149 @@
-"""
-Page: Discovery - Smart Search & Filtering
-"""
-import streamlit as st
+"""Smart search and filtering across indicators and data sources."""
+from __future__ import annotations
+
 import pandas as pd
+import streamlit as st
 
-st.set_page_config(page_title="Discovery - NYEREKA Gender", page_icon="🔎")
+from src.analytics import direction_for, district_vs_national
+from src.loaders import has_processed_data, load_districts, load_indicators, load_sources
+from src.theme import apply_theme, kpi_card, render_source_links
 
-st.title("🔎 Smart Search & Filtering")
+st.set_page_config(page_title="Discovery | NYEREKA", page_icon=" ", layout="wide")
+apply_theme("Smart Search and Filtering", "Search indicators, inspect summaries, and generate recommendation-ready insights.")
 
-st.markdown("""
-This page allows you to search and filter gender-related resources 
-by category, year, source, and other criteria.
-""")
+if not has_processed_data():
+    st.error("Processed files are missing. Build them first:")
+    st.code("python scripts/build_indicators.py", language="bash")
+    st.stop()
 
-# Load data
-@st.cache_data
-def load_data():
-    try:
-        studies = pd.read_csv("data/sample/studies.csv")
-        resources = pd.read_csv("data/sample/study_resources.csv")
-        return studies, resources
-    except FileNotFoundError:
-        st.error("Data files not found. Please ensure data files are in the correct location.")
-        return pd.DataFrame(), pd.DataFrame()
+indicators = load_indicators()
+districts = load_districts()
+sources = load_sources()
 
-studies, resources = load_data()
+if indicators.empty:
+    st.error("No indicators found.")
+    st.stop()
 
-# Search filters
-st.sidebar.header("Filters")
+with st.sidebar:
+    st.header("Search Controls")
+    query = st.text_input("Search keyword", placeholder="e.g. unemployment, violence, mobile money")
 
-# Search box
-search_query = st.sidebar.text_input("Search resources", "")
+    theme_opts = sorted(indicators["theme"].dropna().unique().tolist())
+    selected_themes = st.multiselect("Themes", options=theme_opts, default=theme_opts)
 
-# Category filter
-if not studies.empty:
-    categories = ["All"] + list(studies["category"].unique())
-    selected_category = st.sidebar.selectbox("Category", categories)
-else:
-    selected_category = "All"
+    dataset_opts = sorted(indicators["dataset_name"].dropna().unique().tolist())
+    selected_datasets = st.multiselect("Datasets", options=dataset_opts, default=dataset_opts)
 
-# Year filter
-if not studies.empty:
-    years = ["All"] + sorted([str(y) for y in studies["year"].unique()])
-    selected_year = st.sidebar.selectbox("Year", years)
-else:
-    selected_year = "All"
+    geo_opts = sorted(indicators["geo_level"].dropna().unique().tolist())
+    selected_geo = st.multiselect("Geography level", options=geo_opts, default=geo_opts)
 
-# Data type filter
-if not resources.empty:
-    data_types = ["All"] + list(resources["resource_type"].unique())
-    selected_type = st.sidebar.selectbox("Resource Type", data_types)
-else:
-    selected_type = "All"
+    sex_opts = sorted(indicators["sex"].dropna().unique().tolist())
+    selected_sex = st.multiselect("Sex", options=sex_opts, default=sex_opts)
 
-# Apply filters
-filtered_studies = studies.copy()
-if search_query:
-    filtered_studies = filtered_studies[
-        filtered_studies["study_title"].str.contains(search_query, case=False, na=False) |
-        filtered_studies["description"].str.contains(search_query, case=False, na=False)
+    year_opts = sorted(indicators["year"].dropna().astype(int).unique().tolist())
+    selected_years = st.multiselect("Years", options=year_opts, default=year_opts)
+
+    district_label_map = {
+        f"{row.district_name} ({row.province_name})": int(row.district_code)
+        for _, row in districts.sort_values("district_name").iterrows()
+    }
+    selected_district_label = st.selectbox("Recommendation district", options=list(district_label_map.keys()))
+    selected_district = district_label_map[selected_district_label]
+
+flt = indicators.copy()
+flt = flt[flt["theme"].isin(selected_themes)]
+flt = flt[flt["dataset_name"].isin(selected_datasets)]
+flt = flt[flt["geo_level"].isin(selected_geo)]
+flt = flt[flt["sex"].isin(selected_sex)]
+flt = flt[flt["year"].isin(selected_years)]
+
+if query.strip():
+    q = query.lower().strip()
+    flt = flt[
+        flt["indicator_name"].str.lower().str.contains(q, na=False)
+        | flt["theme"].str.lower().str.contains(q, na=False)
+        | flt["dataset_name"].str.lower().str.contains(q, na=False)
+        | flt["caveat"].str.lower().str.contains(q, na=False)
     ]
 
-if selected_category != "All":
-    filtered_studies = filtered_studies[filtered_studies["category"] == selected_category]
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    kpi_card("Matched Rows", f"{len(flt):,}", "Filtered indicator observations")
+with c2:
+    kpi_card("Indicators", f"{flt['indicator_id'].nunique():,}", "Distinct indicator definitions")
+with c3:
+    kpi_card("Datasets", f"{flt['dataset_name'].nunique():,}", "Sources represented")
+with c4:
+    mean_val = flt["value_pct"].mean() if not flt.empty else 0
+    kpi_card("Mean Value", f"{mean_val:.2f}%", "Across filtered rows")
 
-if selected_year != "All":
-    filtered_studies = filtered_studies[filtered_studies["year"] == int(selected_year)]
+st.markdown("### Resource Summaries and Insights")
+summary = (
+    flt.groupby(["indicator_name", "theme", "dataset_name"], as_index=False)
+    .agg(avg_value=("value_pct", "mean"), latest_year=("year", "max"), records=("value_pct", "count"))
+    .sort_values(["theme", "indicator_name"])
+)
+st.dataframe(summary, use_container_width=True, hide_index=True)
 
-# Display results
-st.subheader(f"Found {len(filtered_studies)} resources")
+st.markdown("### Smart Search Results")
+show_cols = [
+    "indicator_name",
+    "theme",
+    "dataset_name",
+    "year",
+    "geo_level",
+    "district_name",
+    "province_name",
+    "sex",
+    "value_pct",
+    "weight_var",
+    "caveat",
+]
+st.dataframe(flt[show_cols].sort_values(["indicator_name", "year"], ascending=[True, False]), use_container_width=True, hide_index=True)
 
-if not filtered_studies.empty:
-    for idx, row in filtered_studies.iterrows():
-        with st.expander(f" {row['study_title']} ({row['year']})"):
-            st.markdown(f"**Category:** {row['category']}")
-            st.markdown(f"**Institution:** {row['institution']}")
-            st.markdown(f"**Coverage:** {row['geographic_coverage']}")
-            st.markdown(f"**Description:** {row['description']}")
-            
-            # Get related resources
-            if not resources.empty:
-                related = resources[resources["study_id"] == row["study_id"]]
-                if not related.empty:
-                    st.markdown("**Related Resources:**")
-                    for _, res in related.iterrows():
-                        if selected_type == "All" or res["resource_type"] == selected_type:
-                            st.markdown(f"- [{res['resource_title']}]({res['url']}) ({res['resource_type']}, {res['file_format']})")
+st.markdown("### System Recommendations")
+recommend_rows: list[dict] = []
+for indicator_id, group in flt.groupby("indicator_id"):
+    row = group.iloc[0]
+    sex = row["sex"] if row["sex"] in ["Female", "Male"] else "All"
+    compare = district_vs_national(indicators, indicator_id, selected_district, sex=sex)
+    if len(compare) < 2:
+        continue
+    district_v = float(compare.loc[compare["scope"] == "Selected district", "value_pct"].iloc[0])
+    national_v = float(compare.loc[compare["scope"] == "National", "value_pct"].iloc[0])
+    diff = district_v - national_v
+    direction = direction_for(indicator_id)
+    if (direction == "higher_better" and diff < 0) or (direction == "lower_better" and diff > 0):
+        recommend_rows.append(
+            {
+                "Indicator": row["indicator_name"],
+                "Theme": row["theme"],
+                "District": selected_district_label,
+                "District Value": round(district_v, 2),
+                "National Value": round(national_v, 2),
+                "Gap": round(diff, 2),
+                "Action": "Priority follow-up recommended",
+            }
+        )
+
+if recommend_rows:
+    rec_df = pd.DataFrame(recommend_rows).sort_values("Gap")
+    st.dataframe(rec_df, use_container_width=True, hide_index=True)
 else:
-    st.info("No resources match your filters. Try adjusting your search criteria.")
+    st.success("No high-priority underperformance found for current search/filter combination.")
+
+st.markdown("### Source Links")
+source_table = (
+    sources[["dataset_name", "year", "theme", "source_url"]]
+    .drop_duplicates()
+    .sort_values(["year", "dataset_name"], ascending=[False, True])
+)
+st.dataframe(
+    source_table,
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "source_url": st.column_config.LinkColumn("Open Source", display_text="Open in new tab"),
+    },
+)
+render_source_links(source_table, meta_cols=["year", "theme"])

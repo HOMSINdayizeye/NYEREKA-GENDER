@@ -15,9 +15,9 @@ QUALITY_THRESHOLDS = {
 
 # Badge colors for display
 BADGE_EMOJI = {
-    "High": "🟢",
-    "Medium": "🟡",
-    "Low": "🔴"
+    "High": "[HIGH]",
+    "Medium": "[MEDIUM]",
+    "Low": "[LOW]",
 }
 
 
@@ -76,12 +76,12 @@ def get_quality_badge(score: float) -> str:
 
 def get_badge_with_emoji(badge: str) -> str:
     """Get badge with emoji prefix."""
-    return f"{BADGE_EMOJI.get(badge, '⚪')} {badge}"
+    return f"{BADGE_EMOJI.get(badge, '[NA]')} {badge}"
 
 
 def format_quality_display(score: float, badge: str) -> str:
     """Format quality score for display."""
-    emoji = BADGE_EMOJI.get(badge, "⚪")
+    emoji = BADGE_EMOJI.get(badge, "[NA]")
     return f"{emoji} {badge} ({score}/100)"
 
 

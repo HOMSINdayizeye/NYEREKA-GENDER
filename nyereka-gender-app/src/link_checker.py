@@ -123,8 +123,8 @@ def get_link_validation_summary(resources_df) -> str:
         return "No URLs to validate"
     
     summary = f"Validated {total} URLs:\n"
-    summary += f"- ✅ Valid: {valid_count}\n"
-    summary += f"- ❌ Invalid: {invalid_count}\n"
+    summary += f"- Valid: {valid_count}\n"
+    summary += f"- Invalid: {invalid_count}\n"
     
     if invalid_count > 0:
         summary += "\nInvalid URLs:\n"

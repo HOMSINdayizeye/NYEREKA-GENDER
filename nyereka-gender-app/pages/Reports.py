@@ -1,177 +1,174 @@
-"""
-Page: Reports - Generate/Export Insights
-"""
-import streamlit as st
+"""Quarterly reports and follow-up tracking exports."""
+from __future__ import annotations
+
+import datetime as dt
 import pandas as pd
+import streamlit as st
 
-st.set_page_config(page_title="Reports - NYEREKA Gender", page_icon="📄")
+from src.analytics import top_advocacy_priorities
+from src.exporters import text_to_pdf_bytes
+from src.loaders import has_processed_data, load_districts, load_indicators
+from src.theme import apply_theme, kpi_card, render_source_links
 
-st.title("📄 Generate/Export Insights")
+st.set_page_config(page_title="Reports | NYEREKA", page_icon=" ", layout="wide")
+apply_theme("Generating Reports (Quarterly)", "Quarterly reporting, follow-up tracking, and export-ready outputs.")
 
-st.markdown("""
-This page allows you to generate and export custom reports based on 
-gender-related data for advocacy and policy purposes.
-""")
+if not has_processed_data():
+    st.error("Processed files are missing. Build them first:")
+    st.code("python scripts/build_indicators.py", language="bash")
+    st.stop()
 
-# Load data
-@st.cache_data
-def load_data():
-    try:
-        studies = pd.read_csv("data/sample/studies.csv")
-        resources = pd.read_csv("data/sample/study_resources.csv")
-        quality = pd.read_csv("data/sample/quality_report.csv")
-        return studies, resources, quality
-    except FileNotFoundError:
-        st.error("Data files not found.")
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+indicators = load_indicators().dropna(subset=["value_pct"]).copy()
+districts = load_districts()
 
-studies, resources, quality = load_data()
+if indicators.empty:
+    st.error("No indicators available.")
+    st.stop()
 
-# Report generation options
-st.sidebar.subheader("Report Options")
+with st.sidebar:
+    st.header("Quarterly Report Setup")
+    quarter = st.selectbox("Quarter", ["Q1", "Q2", "Q3", "Q4"], index=1)
+    report_year = st.selectbox("Report Year", sorted(indicators["year"].dropna().astype(int).unique().tolist(), reverse=True))
 
-report_type = st.sidebar.selectbox(
-    "Report Type",
-    ["Summary Report", "Quality Assessment", "Resource Inventory", "Category Analysis"]
+    district_map = {
+        f"{row.district_name} ({row.province_name})": int(row.district_code)
+        for _, row in districts.sort_values("district_name").iterrows()
+    }
+    district_label = st.selectbox("District", options=list(district_map.keys()), index=0)
+    district_code = district_map[district_label]
+
+    theme_options = sorted(indicators["theme"].dropna().unique().tolist())
+    selected_theme = st.selectbox("Theme", options=theme_options)
+    sex_focus = st.selectbox("Sex focus", ["All", "Female", "Male"], index=0)
+
+report_df = indicators[
+    (indicators["year"] == report_year)
+    & (indicators["theme"] == selected_theme)
+    & (indicators["geo_level"] == "district")
+    & (indicators["district_code"] == district_code)
+].copy()
+
+if sex_focus != "All":
+    report_df = report_df[(report_df["sex"] == sex_focus) | (report_df["sex"] == "All")]
+
+priorities = top_advocacy_priorities(report_df, n=6)
+
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    kpi_card("Quarter", f"{quarter} {report_year}", "Reporting window")
+with c2:
+    kpi_card("District", district_label.split(" (")[0], "Target district")
+with c3:
+    kpi_card("Theme", selected_theme, "Priority policy area")
+with c4:
+    kpi_card("Indicators", f"{report_df['indicator_id'].nunique():,}", "Included in report")
+
+st.markdown("### Quarterly Indicator Summary")
+summary_cols = [
+    "indicator_name",
+    "sex",
+    "value_pct",
+    "dataset_name",
+    "weight_var",
+    "caveat",
+]
+st.dataframe(report_df[summary_cols].sort_values(["indicator_name", "sex"]), use_container_width=True, hide_index=True)
+
+st.markdown("### Priority Gaps")
+if priorities.empty:
+    st.info("No paired male/female priorities for this filter. Adjust theme or sex focus.")
+else:
+    pshow = priorities[["indicator_name", "Female", "Male", "gap_f_minus_m", "priority_score", "dataset_name"]].copy()
+    pshow.columns = ["Indicator", "Female", "Male", "Gap (F-M)", "Priority", "Source"]
+    st.dataframe(pshow.round(2), use_container_width=True, hide_index=True)
+
+st.markdown("### Source Access Links")
+source_table = (
+    report_df[["dataset_name", "year", "source_url"]]
+    .drop_duplicates()
+    .sort_values(["year", "dataset_name"], ascending=[False, True])
+)
+if source_table.empty:
+    st.info("No source links available for this report filter.")
+else:
+    st.dataframe(
+        source_table,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "source_url": st.column_config.LinkColumn("Open Source", display_text="Open in new tab"),
+        },
+    )
+    render_source_links(source_table, meta_cols=["year"])
+
+st.markdown("### Follow-up Tracker")
+followups = pd.DataFrame(
+    [
+        {
+            "Action": f"Validate {selected_theme} numbers with district statistics office",
+            "Owner": "Data Officer",
+            "Deadline": f"End of {quarter}",
+            "Status": "Pending",
+        },
+        {
+            "Action": "Hold stakeholder review meeting (district + ministry)",
+            "Owner": "Advocacy Lead",
+            "Deadline": f"Mid-{quarter}",
+            "Status": "Pending",
+        },
+        {
+            "Action": "Submit policy brief with budget ask",
+            "Owner": "Program Lead",
+            "Deadline": f"End of {quarter}",
+            "Status": "Pending",
+        },
+    ]
+)
+st.dataframe(followups, use_container_width=True, hide_index=True)
+
+st.markdown("### Export")
+report_export = report_df.copy()
+report_export["quarter"] = quarter
+report_export["report_year"] = report_year
+
+brief_lines = [
+    f"NYEREKA Quarterly Report - {quarter} {report_year}",
+    f"District: {district_label}",
+    f"Theme: {selected_theme}",
+    f"Sex focus: {sex_focus}",
+    f"Generated: {dt.date.today().isoformat()}",
+    "",
+    "Key priorities:",
+]
+
+if priorities.empty:
+    brief_lines.append("- No paired sex priority indicators found for this configuration.")
+else:
+    for row in priorities.itertuples():
+        brief_lines.append(
+            f"- {row.indicator_name}: Female {row.Female:.2f}% vs Male {row.Male:.2f}% (Gap {row.gap_f_minus_m:.2f} pp)"
+        )
+
+brief_lines.append("")
+brief_lines.append("Follow-ups:")
+for item in followups["Action"].tolist():
+    brief_lines.append(f"- {item}")
+
+brief_text = "\n".join(brief_lines)
+brief_pdf = text_to_pdf_bytes(
+    f"NYEREKA Quarterly Report - {district_label}",
+    brief_text,
 )
 
-include_charts = st.sidebar.checkbox("Include Charts", value=True)
-
-# Generate report
-st.subheader(f"Generate {report_type}")
-
-if report_type == "Summary Report":
-    st.markdown("### Executive Summary Report")
-    
-    summary = f"""
-# NYEREKA Gender Data Portal - Executive Summary
-
-## Overview
-This report summarizes available gender-related data resources in Rwanda.
-
-## Key Statistics
-- Total Studies: {len(studies)}
-- Total Resources: {len(resources)}
-- Categories Covered: {', '.join(studies['category'].unique()) if not studies.empty else 'N/A'}
-- Geographic Coverage: {', '.join(studies['geographic_coverage'].unique()) if not studies.empty else 'N/A'}
-
-## Data Quality
-"""
-    
-    if not quality.empty:
-        summary += f"""
-- Average Quality Score: {quality['quality_score'].mean():.1f}
-- High Quality Resources: {len(quality[quality['quality_badge'] == 'High'])}
-- Medium Quality Resources: {len(quality[quality['quality_badge'] == 'Medium'])}
-"""
-    
-    summary += """
-## Key Recommendations
-
-1. **For CSOs**: Use high-quality resources from official sources for advocacy
-2. **For Researchers**: Consider data gaps when designing studies
-3. **For Policy Makers**: Review quality caveats before making decisions
-
----
-*Report generated by NYEREKA Gender Data Portal*
-"""
-    
-    st.markdown(summary)
-    
-    st.download_button(
-        label="Download Report",
-        data=summary,
-        file_name="executive_summary.txt",
-        mime="text/plain"
-    )
-
-elif report_type == "Quality Assessment":
-    st.markdown("### Data Quality Assessment Report")
-    
-    if not quality.empty:
-        # Quality summary
-        st.markdown("#### Quality Summary")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Average Quality Score", f"{quality['quality_score'].mean():.1f}")
-        with col2:
-            st.metric("Highest Score", quality['quality_score'].max())
-        
-        # Quality by badge
-        st.markdown("#### Quality Distribution")
-        for badge in ["High", "Medium"]:
-            count = len(quality[quality["quality_badge"] == badge])
-            st.write(f"- **{badge}**: {count} resources")
-        
-        # Detailed assessment
-        st.markdown("#### Resource Quality Details")
-        
-        merged = resources.merge(quality, on="resource_id") if not resources.empty else quality
-        
-        for idx, row in merged.iterrows():
-            st.markdown(f"**{row.get('resource_title', row.get('resource_id'))}**")
-            st.write(f"- Score: {row['quality_score']} - {row['quality_badge']}")
-            st.write(f"- Caveats: {row['caveats']}")
-            st.write("---")
-    else:
-        st.info("No quality data available")
-    
-    st.download_button(
-        label="Download Quality Report",
-        data="Quality report content...",
-        file_name="quality_assessment.txt",
-        mime="text/plain"
-    )
-
-elif report_type == "Resource Inventory":
-    st.markdown("### Resource Inventory Report")
-    
-    if not resources.empty:
-        st.dataframe(resources, use_container_width=True)
-        
-        # CSV export
-        csv = resources.to_csv(index=False)
-        st.download_button(
-            label="Download Inventory (CSV)",
-            data=csv,
-            file_name="resource_inventory.csv",
-            mime="text/csv"
-        )
-    else:
-        st.info("No resources available")
-
-elif report_type == "Category Analysis":
-    st.markdown("### Category Analysis Report")
-    
-    if not studies.empty:
-        for category in studies["category"].unique():
-            st.markdown(f"#### {category}")
-            cat_studies = studies[studies["category"] == category]
-            
-            for idx, row in cat_studies.iterrows():
-                st.markdown(f"- **{row['study_title']}** ({row['year']}) - {row['institution']}")
-            
-            st.write("---")
-        
-        # Export
-        csv = studies.to_csv(index=False)
-        st.download_button(
-            label="Download Category Analysis (CSV)",
-            data=csv,
-            file_name="category_analysis.csv",
-            mime="text/csv"
-        )
-    else:
-        st.info("No studies available")
-
-# Tips section
-st.markdown("---")
-st.subheader("💡 Tips for Using Reports")
-
-st.info("""
-1. **For Advocacy**: Focus on high-quality resources and note caveats
-2. **For Policy**: Review geographic coverage and temporal relevance
-3. **For Research**: Check data disaggregation options
-4. **For Validation**: Use the Data Quality page to verify sources
-""")
+st.download_button(
+    "Download Quarterly Data (CSV)",
+    data=report_export.to_csv(index=False),
+    file_name=f"nyereka_quarterly_{report_year}_{quarter}_{district_code}.csv",
+    mime="text/csv",
+)
+st.download_button(
+    "Download Quarterly Brief (PDF)",
+    data=brief_pdf,
+    file_name=f"nyereka_quarterly_brief_{report_year}_{quarter}_{district_code}.pdf",
+    mime="application/pdf",
+)

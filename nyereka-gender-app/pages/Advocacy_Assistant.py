@@ -1,273 +1,165 @@
-"""
-Page: Advocacy Assistant - Recommendations (KEY FEATURE)
-"""
+"""Advocacy assistant with recommendations and follow-up actions."""
+from __future__ import annotations
+
+import datetime as dt
 import streamlit as st
-import pandas as pd
 
-st.set_page_config(page_title="Advocacy Assistant - NYEREKA Gender", page_icon="")
+from src.analytics import top_advocacy_priorities
+from src.exporters import text_to_pdf_bytes
+from src.loaders import has_processed_data, load_districts, load_indicators
+from src.theme import apply_theme, kpi_card, render_source_links
 
-st.title(" Advocacy Assistant")
-st.markdown("### KEY FEATURE")
+st.set_page_config(page_title="Advocacy Assistant | NYEREKA", page_icon=" ", layout="wide")
+apply_theme("Advocacy Assistant", "Generate recommendations, follow-ups, and downloadable advocacy briefs.")
 
-st.markdown("""
-This is the key feature of NYEREKA Gender. Use the advocacy assistant to:
-1. Select an issue area
-2. Get relevant data and insights
-3. Generate recommendations for advocacy
-""")
+if not has_processed_data():
+    st.error("Processed files are missing. Build them first:")
+    st.code("python scripts/build_indicators.py", language="bash")
+    st.stop()
 
-# Load data
-@st.cache_data
-def load_data():
-    try:
-        studies = pd.read_csv("data/sample/studies.csv")
-        resources = pd.read_csv("data/sample/study_resources.csv")
-        quality = pd.read_csv("data/sample/quality_report.csv")
-        return studies, resources, quality
-    except FileNotFoundError:
-        st.error("Data files not found.")
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+indicators = load_indicators().dropna(subset=["value_pct"]).copy()
+districts = load_districts()
 
-studies, resources, quality = load_data()
+if indicators.empty:
+    st.error("No indicators found.")
+    st.stop()
 
-# Issue selection
-st.sidebar.subheader("Advocacy Scenario Setup")
+THEME_RECOMMENDATIONS = {
+    "Employment": [
+        "Scale district women-focused TVET and placement programs.",
+        "Create wage-employment incentives for firms hiring women in formal jobs.",
+        "Expand childcare support for working mothers in low-income sectors.",
+    ],
+    "Education": [
+        "Target girls' attendance support in underperforming sectors and cells.",
+        "Fund retention packages: sanitary kits, transport, and mentoring.",
+        "Prioritize school-to-work transition pathways for adolescent girls.",
+    ],
+    "Health": [
+        "Strengthen outreach for women's health insurance enrollment.",
+        "Link community health workers with vulnerable households for referrals.",
+        "Track district-level maternal and reproductive health service gaps quarterly.",
+    ],
+    "GBV": [
+        "Increase confidential GBV reporting channels and survivor case management.",
+        "Expand legal aid and psychosocial services at district level.",
+        "Integrate GBV prevention messaging in schools and community forums.",
+    ],
+    "Finance": [
+        "Promote women-owned savings and transaction accounts.",
+        "Subsidize mobile-money onboarding for low-income women groups.",
+        "Expand district-level financial literacy and digital finance training.",
+    ],
+    "Leadership": [
+        "Support women leadership pipelines in local enterprises and cooperatives.",
+        "Set district targets for women in managerial and decision-making roles.",
+        "Publicly track women leadership indicators in quarterly reviews.",
+    ],
+}
 
-issue_area = st.sidebar.selectbox(
-    "Select Issue Area",
-    ["Education", "Health", "Employment", "Violence Against Women", "Women's Leadership"]
+with st.sidebar:
+    st.header("Brief Configuration")
+    district_label_map = {
+        f"{row.district_name} ({row.province_name})": int(row.district_code)
+        for _, row in districts.sort_values("district_name").iterrows()
+    }
+    default_label = next((k for k, v in district_label_map.items() if v == 24), list(district_label_map.keys())[0])
+    district_label = st.selectbox("District", options=list(district_label_map.keys()), index=list(district_label_map.keys()).index(default_label))
+    district_code = district_label_map[district_label]
+
+    theme_options = sorted(indicators["theme"].dropna().unique().tolist())
+    issue_theme = st.selectbox("Issue Theme", options=theme_options)
+
+    audience = st.selectbox("Target Audience", ["District Leaders", "Ministry Officials", "Development Partners", "Civil Society Coalition"])
+    quarter = st.selectbox("Quarter", ["Q1", "Q2", "Q3", "Q4"], index=1)
+
+focus = indicators[(indicators["geo_level"] == "district") & (indicators["district_code"] == district_code)]
+focus_theme = focus[focus["theme"] == issue_theme]
+priorities = top_advocacy_priorities(focus_theme, n=5)
+
+c1, c2, c3 = st.columns(3)
+with c1:
+    kpi_card("District", district_label.split(" (")[0], "Advocacy target")
+with c2:
+    kpi_card("Theme", issue_theme, "Policy focus area")
+with c3:
+    kpi_card("Priority Signals", f"{len(priorities):,}", "Detected female disadvantage indicators")
+
+st.markdown("### Priority Evidence")
+if priorities.empty:
+    st.info("No paired male/female indicators in this theme for selected district. Try another theme.")
+else:
+    evidence = priorities[["indicator_name", "Female", "Male", "gap_f_minus_m", "dataset_name", "year"]].copy()
+    evidence.columns = ["Indicator", "Female", "Male", "Gap (F-M)", "Source", "Year"]
+    st.dataframe(evidence.round(2), use_container_width=True, hide_index=True)
+
+st.markdown("### System Recommendations")
+for idx, item in enumerate(THEME_RECOMMENDATIONS.get(issue_theme, ["No recommendation template for this theme yet."]), start=1):
+    st.markdown(f"{idx}. {item}")
+
+st.markdown("### Follow-ups")
+follow_ups = [
+    f"Validate {issue_theme} indicators with district planning office before end of {quarter}.",
+    "Schedule one policy review meeting with district + ministry focal points.",
+    "Prepare one-page budget ask linked directly to the top 3 indicator gaps.",
+    "Set quarterly monitoring checkpoints and assign responsible officers.",
+]
+for i, item in enumerate(follow_ups, start=1):
+    st.checkbox(f"Follow-up {i}: {item}", key=f"fu_{i}")
+
+st.markdown("### Generated Advocacy Brief")
+today = dt.date.today().isoformat()
+priority_text = "\n".join(
+    [
+        f"- {row.indicator_name}: Female {row.Female:.2f}% vs Male {row.Male:.2f}% (gap {row.gap_f_minus_m:.2f} pp)"
+        for row in priorities.itertuples()
+    ]
+) or "- No paired sex indicators detected for this theme/district combination."
+
+recommendation_text = "\n".join([f"- {r}" for r in THEME_RECOMMENDATIONS.get(issue_theme, [])])
+follow_text = "\n".join([f"- {f}" for f in follow_ups])
+
+brief = f"""
+ADVOCACY BRIEF
+Date: {today}
+District: {district_label}
+Theme: {issue_theme}
+Audience: {audience}
+Quarter: {quarter}
+
+1) Key evidence
+{priority_text}
+
+2) Recommendations
+{recommendation_text}
+
+3) Follow-ups
+{follow_text}
+""".strip()
+
+st.text_area("Brief preview", value=brief, height=300)
+brief_pdf = text_to_pdf_bytes(
+    f"NYEREKA Advocacy Brief - {district_label}",
+    brief,
+)
+st.download_button(
+    "Download advocacy brief (PDF)",
+    data=brief_pdf,
+    file_name=f"nyereka_brief_{district_code}_{issue_theme.lower()}.pdf",
+    mime="application/pdf",
 )
 
-target_district = st.sidebar.selectbox(
-    "Target District (if applicable)",
-    ["All Districts", "Kigali", "Huye", "Musanze", "Rubavu", "Nyamasheke", "Ruhango"]
-)
-
-audience = st.sidebar.selectbox(
-    "Target Audience",
-    ["District Leaders", "Ministry Officials", "Donors", "General Public"]
-)
-
-# Generate recommendations based on selection
-st.subheader(f"Advocacy Recommendations for {issue_area}")
-
-if issue_area == "Education":
-    st.markdown("###  Education Gender Gap Analysis")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-        **Key Findings:**
-        - Girls' secondary completion rates lag behind boys in most districts
-        - Disparity is most pronounced in rural areas
-        - Key barriers: economic constraints, safety concerns, household responsibilities
-        """)
-    
-    with col2:
-        st.markdown("""
-        **Recommended Data Sources:**
-        - Rwanda Education Statistics 2022
-        - DHS 2020 Education Module
-        - District Education Reports
-        """)
-    
-    st.markdown("---")
-    st.markdown("### Advocacy Recommendations")
-    
-    st.success("""
-    **1. Budget Advocacy**
-    Recommend increasing education budget allocation for vulnerable girls by 15%
-    
-    **2. Scholarship Programs**
-    Propose targeted bursary programs for girls in secondary education
-    
-    **3. Mentorship Initiatives**
-    Establish mentorship programs connecting female students with women leaders
-    
-    **4. Community Engagement**
-    Launch awareness campaigns on importance of girls' education
-    """)
-    
-    # Generate brief
-    st.markdown("---")
-    st.subheader(" Generated Advocacy Brief")
-    
-    brief = f"""
-    **ADVOCACY BRIEF: Closing the Gender Gap in Secondary Education**
-    
-    **Issue:** Girls' lower-secondary completion rates are significantly below boys 
-    in {target_district if target_district != 'All Districts' else 'most Rwandan districts'}.
-    
-    **Evidence:** Based on DHS 2020 and Rwanda Education Statistics 2022 data.
-    
-    **Recommendations for {audience}:**
-    1. Increase budget allocation for girls' education
-    2. Establish targeted scholarship programs
-    3. Create mentorship and support networks
-    4. Implement community awareness programs
-    
-    **Expected Outcome:** Improved completion rates and better future outcomes for girls.
-    """
-    
-    st.markdown(brief)
-    
-    # Download button
-    st.download_button(
-        label="Download Advocacy Brief",
-        data=brief,
-        file_name="advocacy_brief_education.txt",
-        mime="text/plain"
+if not priorities.empty:
+    st.markdown("### Evidence Source Links")
+    source_df = priorities[["dataset_name", "year"]].drop_duplicates().copy()
+    source_df["source_url"] = source_df["dataset_name"].map(
+        {
+            ds: url
+            for ds, url in (
+                indicators[["dataset_name", "source_url"]]
+                .drop_duplicates()
+                .itertuples(index=False, name=None)
+            )
+        }
     )
-
-elif issue_area == "Health":
-    st.markdown("###  Health Indicators Analysis")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-        **Key Findings:**
-        - Maternal mortality ratio has improved but remains a challenge
-        - Access to reproductive health services varies by district
-        - Gender-based health disparities exist in some areas
-        """)
-    
-    with col2:
-        st.markdown("""
-        **Recommended Data Sources:**
-        - DHS 2020 Health Module
-        - Rwanda Health Survey 2022
-        - NISR Health Statistics
-        """)
-    
-    st.markdown("---")
-    st.markdown("### Advocacy Recommendations")
-    
-    st.success("""
-    **1. Health Infrastructure**
-    Advocate for maternal health facilities in underserved areas
-    
-    **2. Health Worker Training**
-    Support training more female health workers
-    
-    **3. Health Education**
-    Promote reproductive health education in schools
-    """)
-
-elif issue_area == "Employment":
-    st.markdown("### Employment Gender Gap Analysis")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-        **Key Findings:**
-        - Women's labor force participation is lower than men's
-        - Wage gap persists across sectors
-        - Informal sector employment is high among women
-        """)
-    
-    with col2:
-        st.markdown("""
-        **Recommended Data Sources:**
-        - Rwanda Labor Force Survey 2021
-        - Youth Employment Report 2023
-        - Gender Statistics Report 2021
-        """)
-    
-    st.markdown("---")
-    st.markdown("###  Advocacy Recommendations")
-    
-    st.success("""
-    **1. Job Creation**
-    Advocate for policies promoting women's employment
-    
-    **2. Skills Training**
-    Support vocational training programs for women
-    
-    **3. Entrepreneurship**
-    Promote women's access to credit and business development
-    """)
-
-elif issue_area == "Violence Against Women":
-    st.markdown("###  Violence Against Women Analysis")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-        **Key Findings:**
-        - VAW prevalence remains a concern
-        - Underreporting is likely significant
-        - Support services are limited in some areas
-        """)
-    
-    with col2:
-        st.markdown("""
-        **Recommended Data Sources:**
-        - VAW Survey 2021
-        - Police statistics
-        - Service provider reports
-        """)
-    
-    st.markdown("---")
-    st.markdown("### Advocacy Recommendations")
-    
-    st.success("""
-    **1. Prevention Programs**
-    Advocate for GBV prevention programs in communities
-    
-    **2. Support Services**
-    Support expansion of shelter and counseling services
-    
-    **3. Legal Reform**
-    Push for implementation and enforcement of relevant laws
-    """)
-
-elif issue_area == "Women's Leadership":
-    st.markdown("###  Women's Leadership Analysis")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-        **Key Findings:**
-        - Women's representation in leadership positions has improved
-        - Gap remains in senior positions
-        - Progress varies by sector
-        """)
-    
-    with col2:
-        st.markdown("""
-        **Recommended Data Sources:**
-        - Women's Leadership Study 2022
-        - Gender Statistics Report 2021
-        - Public Service data
-        """)
-    
-    st.markdown("---")
-    st.markdown("###  Advocacy Recommendations")
-    
-    st.success("""
-    **1. Quota Systems**
-    Advocate for stronger gender quotas in leadership
-    
-    **2. Mentorship**
-    Create leadership mentorship programs
-    
-    **3. Policy Reform**
-    Push for family-friendly policies in workplace
-    """)
-
-# Key resources for advocacy
-st.markdown("---")
-st.subheader("Key Resources for Advocacy")
-
-if not studies.empty:
-    relevant = studies[studies["category"] == issue_area]
-    if relevant.empty:
-        relevant = studies.head(3)
-    
-    for idx, row in relevant.iterrows():
-        st.markdown(f"- **{row['study_title']}** ({row['year']}) - {row['institution']}")
+    render_source_links(source_df.dropna(subset=["source_url"]), meta_cols=["year"])

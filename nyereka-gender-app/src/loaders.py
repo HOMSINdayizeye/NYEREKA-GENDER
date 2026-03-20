@@ -1,78 +1,77 @@
-"""
-Data Loaders - Load and preprocess data
-"""
-import pandas as pd
+"""Data loading helpers for NYEREKA dashboard."""
+from __future__ import annotations
+
 from pathlib import Path
+import pandas as pd
+
+APP_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = APP_ROOT.parent
+PROCESSED_DIR = APP_ROOT / "data" / "processed"
 
 
-def get_data_path(filename: str) -> Path:
-    """Get path to data file."""
-    return Path(__file__).parent.parent / "data" / "sample" / filename
+def processed_path(filename: str) -> Path:
+    return PROCESSED_DIR / filename
 
 
-def load_studies() -> pd.DataFrame:
-    """Load studies data."""
+def has_processed_data() -> bool:
+    required = [
+        processed_path("indicators.csv"),
+        processed_path("indicator_catalog.csv"),
+        processed_path("sources.csv"),
+        processed_path("quality_summary.csv"),
+        processed_path("districts.csv"),
+    ]
+    return all(p.exists() for p in required)
+
+
+def load_indicators() -> pd.DataFrame:
     try:
-        return pd.read_csv(get_data_path("studies.csv"))
+        df = pd.read_csv(processed_path("indicators.csv"))
+        for col in ["year", "province_code", "district_code", "value_pct", "n_unweighted"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        return df
     except FileNotFoundError:
         return pd.DataFrame()
 
 
-def load_resources() -> pd.DataFrame:
-    """Load study resources data."""
+def load_indicator_catalog() -> pd.DataFrame:
     try:
-        return pd.read_csv(get_data_path("study_resources.csv"))
+        return pd.read_csv(processed_path("indicator_catalog.csv"))
     except FileNotFoundError:
         return pd.DataFrame()
 
 
-def load_quality() -> pd.DataFrame():
-    """Load quality report data."""
+def load_sources() -> pd.DataFrame:
     try:
-        return pd.read_csv(get_data_path("quality_report.csv"))
+        return pd.read_csv(processed_path("sources.csv"))
     except FileNotFoundError:
         return pd.DataFrame()
 
 
-def load_all_data() -> tuple:
-    """Load all data files and return as tuple."""
-    return load_studies(), load_resources(), load_quality()
+def load_quality_summary() -> pd.DataFrame:
+    try:
+        return pd.read_csv(processed_path("quality_summary.csv"))
+    except FileNotFoundError:
+        return pd.DataFrame()
 
 
-def preprocess_studies(df: pd.DataFrame) -> pd.DataFrame:
-    """Preprocess studies data."""
-    if df.empty:
+def load_districts() -> pd.DataFrame:
+    try:
+        df = pd.read_csv(processed_path("districts.csv"))
+        for col in ["district_code", "province_code"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
         return df
-    
-    # Ensure year is integer
-    df["year"] = df["year"].astype(int)
-    
-    # Clean category names
-    df["category"] = df["category"].str.strip()
-    
-    return df
+    except FileNotFoundError:
+        return pd.DataFrame()
 
 
-def preprocess_resources(df: pd.DataFrame) -> pd.DataFrame:
-    """Preprocess resources data."""
-    if df.empty:
-        return df
-    
-    # Ensure file size is numeric
-    df["file_size_mb"] = pd.to_numeric(df["file_size_mb"], errors="coerce")
-    
-    return df
-
-
-def preprocess_quality(df: pd.DataFrame) -> pd.DataFrame:
-    """Preprocess quality data."""
-    if df.empty:
-        return df
-    
-    # Ensure scores are numeric
-    numeric_cols = ["quality_score", "source_authority", "freshness", "coverage", "documentation"]
-    for col in numeric_cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-    
-    return df
+def load_all() -> dict[str, pd.DataFrame]:
+    return {
+        "indicators": load_indicators(),
+        "catalog": load_indicator_catalog(),
+        "sources": load_sources(),
+        "quality": load_quality_summary(),
+        "districts": load_districts(),
+    }
