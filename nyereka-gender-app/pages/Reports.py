@@ -75,12 +75,37 @@ summary_cols = [
 st.dataframe(report_df[summary_cols].sort_values(["indicator_name", "sex"]), use_container_width=True, hide_index=True)
 
 st.markdown("### Priority Gaps")
-if priorities.empty:
+# Check if required columns exist (handle themes without gender-disaggregated data)
+required_cols = ["indicator_name", "Female", "Male", "gap_f_minus_m", "priority_score", "dataset_name"]
+missing_cols = [c for c in required_cols if c not in priorities.columns]
+
+if priorities.empty or missing_cols == required_cols:
     st.info("No paired male/female priorities for this filter. Adjust theme or sex focus.")
 else:
-    pshow = priorities[["indicator_name", "Female", "Male", "gap_f_minus_m", "priority_score", "dataset_name"]].copy()
-    pshow.columns = ["Indicator", "Female", "Male", "Gap (F-M)", "Priority", "Source"]
+    available_cols = [c for c in required_cols if c in priorities.columns]
+    pshow = priorities[available_cols].copy()
+    # Create friendly column names for available columns
+    col_rename = {
+        "indicator_name": "Indicator",
+        "Female": "Female",
+        "Male": "Male",
+        "gap_f_minus_m": "Gap (F-M)",
+        "priority_score": "Priority",
+        "dataset_name": "Source",
+    }
+    pshow.rename(columns=col_rename, inplace=True)
     st.dataframe(pshow.round(2), use_container_width=True, hide_index=True)
+
+    # Bar chart for gender comparison
+    if "Female" in priorities.columns and "Male" in priorities.columns:
+        chart_data = priorities[["indicator_name", "Female", "Male"]].copy()
+        chart_data = chart_data.dropna(subset=["Female", "Male"])
+        if not chart_data.empty:
+            st.markdown("#### Gender Gap Visualization")
+            # Show Female chart
+            st.bar_chart(chart_data.set_index("indicator_name")["Female"], horizontal=True, color="#e91e63")
+            # Show Male chart
+            st.bar_chart(chart_data.set_index("indicator_name")["Male"], horizontal=True, color="#2196f3")
 
 st.markdown("### Source Access Links")
 source_table = (
@@ -141,7 +166,7 @@ brief_lines = [
     "Key priorities:",
 ]
 
-if priorities.empty:
+if priorities.empty or "Female" not in priorities.columns or "Male" not in priorities.columns:
     brief_lines.append("- No paired sex priority indicators found for this configuration.")
 else:
     for row in priorities.itertuples():

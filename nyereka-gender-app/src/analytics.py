@@ -48,6 +48,11 @@ def gender_gap_table(df: pd.DataFrame) -> pd.DataFrame:
         .rename_axis(None, axis=1)
     )
 
+    # Ensure both columns exist (even if data is missing for one sex)
+    for col in ["Female", "Male"]:
+        if col not in piv.columns:
+            piv[col] = pd.NA
+
     if "Female" in piv.columns and "Male" in piv.columns:
         piv["gap_f_minus_m"] = piv["Female"] - piv["Male"]
     else:

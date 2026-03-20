@@ -38,15 +38,7 @@ with col3:
 with col4:
     kpi_card("Latest Year", f"{int(indicators['year'].max())}", "Most recent source in pipeline")
 
-st.markdown("### Presentation Flow")
-st.markdown(
-    """
-1. National snapshot with top gender gaps.
-2. District explorer for Huye and peer districts.
-3. Advocacy assistant for recommendations and follow-ups.
-4. Quarterly report and data-quality transparency.
-    """
-)
+
 
 st.markdown("### Data Sources and Access Paths")
 source_table = (
@@ -73,8 +65,5 @@ st.dataframe(
 )
 
 with st.sidebar:
-    st.header("Quick Actions")
-    st.caption("If raw files change, rebuild indicators before demo.")
-    st.code("python scripts/build_indicators.py", language="bash")
-    st.caption("Run app")
-    st.code("streamlit run app.py", language="bash")
+    st.header("Navigation")
+    st.caption("Use the pages in the sidebar to explore gender data.")
