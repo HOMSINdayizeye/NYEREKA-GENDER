@@ -14,6 +14,21 @@ apply_theme("District Gender Intelligence Dashboard", "Interactive district anal
 
 # Sidebar styling
 st.markdown("""<style>
+[data-testid="stSidebar"] { background-color: #1D3557 !important; }
+[data-testid="stSidebar"] * { color: rgba(255,255,255,0.95) !important; }
+[data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 { color: rgba(255,255,255,0.95) !important; }
+[data-testid="stSidebar"] .stMarkdown p { color: rgba(255,255,255,0.9) !important; }
+[data-testid="stSidebar"] label { color: rgba(255,255,255,0.95) !important; font-weight: 500 !important; }
+[data-testid="stSidebar"] .stSelectbox label { color: rgba(255,255,255,0.95) !important; font-weight: 500 !important; }
+[data-testid="stSidebar"] .stMultiSelect label { color: rgba(255,255,255,0.95) !important; font-weight: 500 !important; }
+[data-testid="stSidebar"] .stCheckbox label { color: rgba(255,255,255,0.9) !important; }
+[data-testid="stSidebar"] [data-baseweb="select"] { color: white !important; }
+[data-testid="stSidebar"] div[data-baseweb="select"] > div { color: white !important; background-color: transparent !important; }
+[data-testid="stSidebar"] [class*="StyledContent"] { color: white !important; }
+[data-testid="stSidebar"] [class*="singleValue"] { color: white !important; }
+[data-testid="stSidebar"] span[data-text="true"] { color: white !important; }
+</style>""", unsafe_allow_html=True)
+st.markdown("""<style>
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #f8f9fc 0%, #e8ecf1 100%);
         border-right: 1px solid #d0d5dd;

@@ -1,53 +1,33 @@
 # NYEREKA Gender Data Portal
 
-A Streamlit-based prototype to help CSOs and policy actors discover, interpret, and use gender-related resources with less friction.
+>  **Status: Prototype / Work in Progress** — Built during a Hackathon
+
+A Streamlit-based prototype to help CSOs and policy actors in **Rwanda** discover, interpret, and use gender-related resources with less friction.
+
+---
 
 ## Problem Context
 
 CSOs and policy actors repeatedly struggle to:
+
 - Find up-to-date gender-related data quickly
 - Locate the correct institution and latest source
 - Work with PDF-heavy or narrative-only resources
 - Access disaggregated and district-useful data
 - Move fast enough for advocacy and policy cycles
 
-This challenge was selected from workshop and survey evidence because it has the highest urgency and immediate value for evidence-based advocacy.
+---
 
 ## Project Mission
 
-Build a **Streamlit prototype** that helps users discover, interpret, and use gender-related resources with less friction.
+Build a **Streamlit prototype** that helps users discover, interpret, and use gender-related resources with less friction — focused on Rwanda's district-level gender data.
 
-### Solution Types
-
-The solution may be:
-- A dashboard
-- A searchable catalog
-- A hybrid dashboard + discovery tool
-
-## What Good Looks Like
-
-Your app should help users:
-
-1. **Find relevant resources quickly** - Efficient search and filtering capabilities
-2. **Understand resource relevance from metadata** - Clear metadata display showing source, date, coverage
-3. **Access source links clearly** - Direct links to original sources (NISR, government portals)
-4. **See quality caveats and limitations** - Transparent data quality indicators
-5. **Use outputs in one advocacy scenario** - Practical tools for real-world advocacy work
-
-## Scope & Constraints
-
-### In Scope
-- Use baseline CSV inventory provided for fast start
-- Validate key resources directly from NISR links
-- Streamlit web application
-
-### Out of Scope
-- Bypassing restricted systems or protected endpoints
-- Building backend databases (use provided CSV as data source)
+---
 
 ## Getting Started
 
 ### Prerequisites
+
 - Python 3.8+
 - Streamlit
 
@@ -55,11 +35,14 @@ Your app should help users:
 
 ```bash
 # Clone the repository
-git clone <https://github.com/HOMSINdayizeye/NYEREKA-GENDER.git>
-cd NYEREKA-GENDER
+git clone https://github.com/HOMSINdayizeye/NYEREKA-GENDER.git
+cd nyereka-gender-app
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Build processed indicators from raw data in ../data
+python scripts/build_indicators.py
 ```
 
 ### Running the Application
@@ -68,36 +51,61 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
+If raw files change, rebuild indicators:
+
+```bash
+python scripts/build_indicators.py
+```
+
+---
+
 ## Project Structure
 
 ```
-NYEREKA-GENDER/
-├── app.py                 # Main Streamlit application
+nyereka-gender-app/
+├── app.py                      # Main entry point (hero + navigation)
+├── requirements.txt            # Dependencies (streamlit, pandas, plotly, requests)
+├── README.md                   # Project documentation
+├── VALIDATION.md               # Data validation rules
+├── scripts/
+│   └── build_indicators.py     # Build processed indicator tables from raw data
+├── .gitignore
+├── .streamlit/                 # Streamlit configuration (theme, layout)
+│   └── config.toml
 ├── data/
-│   └── resources.csv      # Baseline CSV inventory
-├── README.md              # This file
-└── requirements.txt       # Python dependencies
+│   └── processed/              # Generated indicator data used by dashboard
+│       ├── indicators.csv
+│       ├── indicator_catalog.csv
+│       ├── sources.csv
+│       ├── quality_summary.csv
+│       └── districts.csv
+├── pages/
+│   ├── Discovery.py           # Smart search/filter + recommendations
+│   ├── Dashboard.py           # District-level interactive visualization
+│   ├── Data_Quality.py        # Quality scores, caveats, and checklist
+│   ├── Advocacy_Assistant.py  # Recommendations + follow-up tracking
+│   └── Reports.py             # Quarterly report generation + exports
+└── src/
+    ├── __init__.py
+    ├── loaders.py              # Load + preprocess data
+    ├── filters.py              # Search & filtering logic
+    ├── link_checker.py         # Validate dataset/report links
+    ├── quality_badges.py       # Data quality indicators
+    └── insights.py             # Advocacy insights & recommendations
 ```
 
-## Data Source
-
-The application uses a baseline CSV inventory containing gender-related resources with the following metadata:
-- Resource title
-- Institution/Source
-- Date/Year
-- Geographic coverage
-- Data type (PDF, dataset, report)
-- Category
-- URL/Link
-- Quality indicators
+---
 
 ## Key Features
+|--------------------------------------------------------|
+| Feature                                  | Status      |
+|------------------------------------------|-------------|
+|  Discovery / Smart Search                | Working     |
+| Dashboard — District-level visualizations| Working     |
+|  Data Quality — Quality scores & caveats | Working     |
+|  Advocacy Assistant — Recommendations    | Working     |
 
-- **Searchable Catalog**: Filter resources by category, year, source, and type
-- **Dashboard View**: Overview statistics and visualizations
-- **Metadata Display**: Clear information about each resource
-- **Quality Indicators**: Caveats and limitations clearly shown
-- **Direct Links**: Quick access to original NISR sources
+---
 
 ## Target Users
 
@@ -107,8 +115,51 @@ The application uses a baseline CSV inventory containing gender-related resource
 - Government stakeholders
 - Development partners
 
+---
+
+## Data Sources
+
+The application uses a baseline CSV inventory containing gender-related resources from Rwanda, primarily sourced from:
+
+- **NISR** — National Institute of Statistics of Rwanda
+- DHS (Demographic and Health Survey 2019–2020)
+- Rwanda Labour Force Survey 2024
+- FinScope Rwanda 2024
+- PHC5 Public Microdata
+
+---
+
+## Scope & Constraints
+
+### In Scope
+- Use baseline CSV inventory provided for fast start
+- Validate key resources directly from NISR links
+- Streamlit web application focused on Rwanda
+
+### Out of Scope
+- Bypassing restricted systems or protected endpoints
+- Building backend databases (use provided CSV as data source)
+
+---
+
+## Team
+----------------------------------------------------------------------
+| Name              |    Role        |                    Email      |
+|----------------   |----------------|-------------------------------|
+| Amos NDAYIZEYE    |      Developer | homsindayizeye@gmail.com      |
+| Amos MUSABYIMANA  | Data Analyst   | musabiano@gmail.com           |
+| Abraham TUYISHIME |Developer       | tuyishimeabraham455@gmail.com |
+|--------------------------------------------------------------------|
+
+## Contact
+
+For questions or collaboration, reach out to the team:
+-  homsindayizeye@gmail.com
+-  musabiano@gmail.com
+-  tuyishimeabraham455@gmail.com
+
+---
+
 ## License
 
-This project is for prototyping purposes. Data sources are owned by their respective institutions (primarily NISR - National Institute of Statistics of Rwanda).
-
-
+This project was built during a Hackathon for prototyping purposes. Data sources are owned by their respective institutions (primarily NISR — National Institute of Statistics of Rwanda). Not intended for commercial use.
