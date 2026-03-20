@@ -41,8 +41,8 @@ Armed with this evidence, the NGO secures a commitment from district leaders to 
 ## Technical setup
 ================================================
 - Streamlit entry point: app.py
-- Install command: pip install -r requirements.txt
-- Run command: streamlit run app.py
+- Install command: `pip install -r requirements.txt`
+- Run command: `streamlit run app.py`
 
 ## Data and provenance
 - Files used: resources.csv (baseline CSV inventory)
